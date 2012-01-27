@@ -20,6 +20,7 @@ class ZygoteTest(TestCase):
 
     __test__ = False
 
+    # Set to False if you want to see output from subprocesses
     USE_DEVNULL = True
 
     basedir = './example'
@@ -86,28 +87,23 @@ class ZygoteTest(TestCase):
     @setup
     def sanity_check_process(self):
         """Ensure the process didn't crash immediately"""
-        assert_equals(self.proc.returncode, None)
         time.sleep(1)
+        self.proc.poll()
+        assert_equals(self.proc.returncode, None, "process died")
 
     def get_process_tree(self):
-        pid_map = {}
-        for potential_pid in os.listdir('/proc'):
-            if not num_re.match(potential_pid):
-                continue
-            pid = int(potential_pid)
-            try:
-                with open('/proc/%d/stat' % pid) as stat_file:
-                    data = stat_file.read().strip()
-            except IOError:
-                continue
-            try:
-                m = stat_re.match(data).groups()
-                ppid = int(m[0])
-            except AttributeError:
-                print repr(data)
-                sys.exit(1)
-            pid_map.setdefault(ppid, []).append(pid)
-        return pid_map
+      pid_map = {}
+      for line in subprocess.check_output(['ps', 'a', '-O', 'ppid']).split('\n'):
+          columns = line.split()
+          if len(columns) < 2:
+            continue
+          pid, ppid = columns[:2]
+          if not num_re.match(pid):
+              continue
+          pid = int(pid)
+          ppid = int(ppid)
+          pid_map.setdefault(ppid, []).append(pid)
+      return pid_map
 
     @setup
     def check_process_tree(self):
